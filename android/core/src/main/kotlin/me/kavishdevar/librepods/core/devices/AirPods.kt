@@ -477,6 +477,8 @@ object AirPodsSpecs {
                 BaseCapability.LOUD_SOUND_REDUCTION,
                 BaseCapability.ADAPTIVE_AUDIO,
                 BaseCapability.ADAPTIVE_VOLUME,
+                // Experimental: exposes head tracking / spatial audio screen for testing on Max 2
+                BaseCapability.HEAD_GESTURES,
             )
         ),
         AirPodsModel.UNKNOWN to AirPodsSpec(
