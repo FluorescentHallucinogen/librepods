@@ -20,15 +20,15 @@ on:
 
 jobs:
   build:
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
-      GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx16g -XX:MaxMetaspaceSize=2g -XX:+UseParallelGC" -Dkotlin.daemon.jvm.options="-Xmx6g,-XX:+UseParallelGC" -Dorg.gradle.workers.max=8'
+      GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+UseParallelGC" -Dkotlin.daemon.jvm.options="-Xmx3g,-XX:+UseParallelGC" -Dorg.gradle.workers.max=4'
     outputs:
       short_sha: ${{ steps.vars.outputs.short_sha }}
       app_version: ${{ steps.version.outputs.app_version }}
       version_code: ${{ steps.version.outputs.version_code }}
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v5
         with:
           submodules: true
           fetch-depth: 0
@@ -38,23 +38,22 @@ jobs:
           distribution: zulu
           java-version: 21
 
-      - name: Mount Gradle Cache
-        uses: useblacksmith/stickydisk@v1
-        with:
-          key: ${{ github.repository }}-android-gradle-cache
-          path: ~/.gradle
+      - name: Setup Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Mount Native NDK CXX Cache
-        uses: useblacksmith/stickydisk@v1
+      - name: Cache Native NDK CXX
+        uses: actions/cache@v4
         with:
-          key: ${{ github.repository }}-android-cxx-cache
           path: android/app/.cxx
+          key: ${{ runner.os }}-android-cxx-${{ hashFiles('android/app/src/main/cpp/**', 'android/app/build.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-android-cxx-
 
-      - name: Mount Android NDK
-        uses: useblacksmith/stickydisk@v1
+      - name: Cache Android NDK
+        uses: actions/cache@v4
         with:
-          key: ${{ github.repository }}-android-ndk
-          path: /usr/local/lib/android/sdk/ndk
+          path: /usr/local/lib/android/sdk/ndk/30.0.14904198
+          key: ${{ runner.os }}-android-ndk-30.0.14904198
 
       - name: Decode keystore
         if: github.event_name != 'pull_request'
@@ -70,7 +69,7 @@ jobs:
           if [ ! -d "/usr/local/lib/android/sdk/ndk/30.0.14904198" ]; then
             sdkmanager "ndk;30.0.14904198"
           else
-            echo "NDK 30.0.14904198 already cached on sticky disk"
+            echo "NDK 30.0.14904198 restored from cache"
           fi
 
       - name: Create local.properties
@@ -131,13 +130,13 @@ jobs:
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' ||
        github.ref == 'refs/heads/android/rewrite')
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     needs: build
     permissions:
       contents: write
 
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
