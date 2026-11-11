@@ -56,6 +56,14 @@ https://github.com/starman-tech/mousepods
 Independent documentation of the 58-byte DEVMOTION6 payload (attitude quaternion, gyro and
 gravity fields, gyro scale). Used to cross-check our own measurements; no code was copied.
 
+## FIocker/aap-head-tracker (GPL-3.0-only)
+
+https://github.com/FIocker/aap-head-tracker
+
+Source of the AirPods Max 2 protocol facts: devmotion6 is a dynamically assigned RTBuddy service
+(ID 6 on firmware 8E258), how a motion report is recognised, and which sensor axes are yaw, pitch
+and roll. Reimplemented from those facts; no code was copied.
+
 ## Shizuku (Apache-2.0)
 
 https://github.com/RikkaApps/Shizuku

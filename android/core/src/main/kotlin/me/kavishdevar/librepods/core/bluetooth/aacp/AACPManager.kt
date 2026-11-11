@@ -55,6 +55,7 @@ import me.kavishdevar.librepods.core.bluetooth.aacp.types.SensorDataWxBuddyPaylo
 import me.kavishdevar.librepods.core.data.apple.BuddyState
 import me.kavishdevar.librepods.core.data.audio.MicrophoneFrame
 import me.kavishdevar.librepods.core.data.heartrate.HeartRateSample
+import me.kavishdevar.librepods.core.devices.AirPodsModel
 import me.kavishdevar.librepods.core.devices.AppleDevice
 import me.kavishdevar.librepods.core.devices.BatterySource
 import me.kavishdevar.librepods.core.devices.BatteryStatus
@@ -676,6 +677,7 @@ class AACPManager(private val device: AppleDevice) {
     }
 
     fun setSensorServiceReportInterval(sensorServiceType: SensorServiceType, interval: Duration): Boolean = rtBuddyManager.setSensorServiceReportInterval(sensorServiceType, interval)
+    fun setSensorServiceReportInterval(serviceId: Int, interval: Duration): Boolean = rtBuddyManager.setSensorServiceReportInterval(serviceId, interval)
 
     fun sendRename(name: String): Boolean {
         val packet = RenamePacket.create(name)
@@ -1158,10 +1160,20 @@ class AACPManager(private val device: AppleDevice) {
      * see ShizukuHeadTracker.mirrorEarLeft/Right). Read every frame, so a primary swap applies at once.
      */
     private fun poseMirrorEar(): Boolean = when (device.state.value.primaryComponent) {
-        DeviceComponent.LEFT -> ShizukuHeadTracker.mirrorEarLeft
         DeviceComponent.RIGHT -> ShizukuHeadTracker.mirrorEarRight
-        else -> false
+        // Headsets (AirPods Max) have no primary bud; the toggle stores their flip under the left key.
+        else -> ShizukuHeadTracker.mirrorEarLeft
     }
+
+    private fun isMax2(): Boolean = device.metadata.value.model == AirPodsModel.AIRPODS_MAX_2
+
+    /** Head +x (right ear) in sensor coords for the connected model. */
+    private fun poseEarAxis(mirror: Boolean): FloatArray =
+        if (isMax2()) {
+            if (mirror) EAR_AXIS_MAX_2_MIRRORED else EAR_AXIS_MAX_2
+        } else {
+            if (mirror) EAR_AXIS_MIRRORED else EAR_AXIS
+        }
 
     private var poseRef: FloatArray? = null
     private var poseBasis: Array<FloatArray>? = null
@@ -1194,6 +1206,11 @@ class AACPManager(private val device: AppleDevice) {
         // Head +x (right ear) in sensor coords; the gravity-aligned frame only uses its horizontal part.
         val EAR_AXIS: FloatArray = floatArrayOf(-PITCH_AXIS[0], -PITCH_AXIS[1], -PITCH_AXIS[2])
         val EAR_AXIS_MIRRORED: FloatArray = HeadFrame.mirrored(EAR_AXIS)
+        // AirPods Max 2: the sensor frame follows the head (y vertical, x front-back, z through the
+        // ear cups; axes from FIocker/aap-head-tracker). Which way +z points is not measured, so
+        // "Flip pitch/roll" may be needed.
+        val EAR_AXIS_MAX_2: FloatArray = floatArrayOf(0f, 0f, 1f)
+        val EAR_AXIS_MAX_2_MIRRORED: FloatArray = HeadFrame.mirrored(EAR_AXIS_MAX_2)
     }
     private var poseLogCount = 0
     // HID discontinuity counter (uint8); 1 until the first recenter, as before.
@@ -1213,14 +1230,31 @@ class AACPManager(private val device: AppleDevice) {
     }
 
     private fun handleSensorData(data: SensorDataWX) {
+        if (data.hasSensorDescriptor()) {
+            // Service IDs can be assigned by the firmware (AirPods Max 2); log what it advertises.
+            val descriptor = data.sensorDescriptor
+            Log.d(
+                TAG,
+                "Sensor descriptor: service=${descriptor.serviceValue}, descriptor: ${descriptor.sensorDescriptor.toByteArray().toHexString()}"
+            )
+        }
         if (data.hasCommand()) {
-            when (data.command.service) {
+            // AirPods Max 2 stream devmotion6 on a dynamic service ID, which the static enum reads as MANDO.
+            val max2Motion = isMax2() && data.command.serviceValue == RTBuddyManager.MAX_2_DEVMOTION6_SERVICE_ID
+            when (if (max2Motion) SensorServiceType.DEVMOTION6 else data.command.service) {
                 SensorServiceType.ACTIVITY,
                 SensorServiceType.CMA,
                 SensorServiceType.DEVMOTION6 -> {
                     val payload = data.command.payload.toByteArray()
 
-                    if (payload.size != 58) {
+                    // Max 2 reports keep the DEVMOTION6 layout but may be longer; motion samples have
+                    // 01 at [0] and 03 at [9] (checks from FIocker/aap-head-tracker).
+                    val validPayload = if (max2Motion) {
+                        payload.size >= 58 && payload[0].toInt() == 1 && payload[9].toInt() == 3
+                    } else {
+                        payload.size == 58
+                    }
+                    if (!validPayload) {
                         Log.w(
                             TAG,
                             "Unexpected payload size for ACTIVITY/DEVMOTION6: ${payload.size}, payload: ${payload.toHexString()}"
@@ -1339,7 +1373,7 @@ class AACPManager(private val device: AppleDevice) {
                             val ax = upAcc[0]; val ay = upAcc[1]; val az = upAcc[2]
                             val an = kotlin.math.sqrt(ax * ax + ay * ay + az * az)
                             val up = if (an > 300f) floatArrayOf(ax / an, ay / an, az / an) else YAW_AXIS
-                            val xh = if (mirror) PITCH_AXIS.copyOf() else floatArrayOf(-PITCH_AXIS[0], -PITCH_AXIS[1], -PITCH_AXIS[2])
+                            val xh = poseEarAxis(mirror).copyOf()
                             val d = up[0] * xh[0] + up[1] * xh[1] + up[2] * xh[2]
                             val zs = norm(floatArrayOf(up[0] - d * xh[0], up[1] - d * xh[1], up[2] - d * xh[2]))
                             val zh = floatArrayOf(-zs[0], -zs[1], -zs[2])
@@ -1354,7 +1388,7 @@ class AACPManager(private val device: AppleDevice) {
                         // projected on z = up, x = horizontal ear axis (HeadFrame). The legacy sensor-frame
                         // basis above stays for A/B (spatial_head_tracking_legacy_frame) and as the fallback
                         // when the ear axis is near vertical.
-                        val worldBasis = if (ShizukuHeadTracker.legacyFrame) null else HeadFrame.basis(ref, if (mirror) EAR_AXIS_MIRRORED else EAR_AXIS)
+                        val worldBasis = if (ShizukuHeadTracker.legacyFrame) null else HeadFrame.basis(ref, poseEarAxis(mirror))
                         val head = worldBasis?.let { HeadFrame.project(HeadFrame.relRotVecWorld(ref, cur), it) }
                         val hx = if (head != null) head[0] else vx * basis[0][0] + vy * basis[0][1] + vz * basis[0][2]
                         val hy = if (head != null) head[1] else vx * basis[1][0] + vy * basis[1][1] + vz * basis[1][2]

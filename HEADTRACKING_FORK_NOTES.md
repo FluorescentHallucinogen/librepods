@@ -97,6 +97,21 @@ Conversion in `AACPManager`:
 AirPods stream rate is the interval in the 0x17 start packet (Diagnostics selector: 40 / 20 / 10 ms). Measured at 10 ms: about
 99 Hz over 43 s, almost no repeated samples. Bluetooth arrival is bursty (median gap 8 ms, p95 33 ms, max 132 ms).
 
+### AirPods Max 2 (not tested on a phone)
+
+Protocol facts from https://github.com/FIocker/aap-head-tracker, confirmed there on A3454 with firmware 8E258 (Windows):
+
+- The firmware does not stream on the static DEVMOTION6 ID (16). It advertises devmotion6 as a dynamically assigned
+  RTBuddy service, ID 6 (`RTBuddyManager.MAX_2_DEVMOTION6_SERVICE_ID`). Start and stop are the usual `SensorServiceSetting`
+  with that ID, and reports arrive as `SensorCommand` with service 6, which the static enum names `MANDO`.
+- Reports keep the layout above (attitude at 20/22/24) and are at least 58 bytes; motion samples have payload[0] == 1
+  and payload[9] == 3. Gyro and gravity offsets are assumed to be the same as on AirPods Pro.
+- Sensor axes follow the head: y vertical, x front-back, z through the ear cups. The ear axis is therefore (0, 0, 1)
+  (`EAR_AXIS_MAX_2`) instead of the measured AirPods Pro axis. Its sign is a guess; "Flip pitch/roll" inverts it.
+
+The ID is hard-coded, not discovered, so other firmware may need another one. Sensor descriptors are logged
+(`Sensor descriptor: service=...`) to check what the firmware advertises.
+
 ### Platform behaviour (read from AOSP, not verified on ColorOS)
 
 `SpatializerPoseController` recenters when the head stays within about 10.5 degrees for 6 s, and rate-limits the jump

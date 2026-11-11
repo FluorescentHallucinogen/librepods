@@ -16,6 +16,13 @@ class RTBuddyManager(
 ) {
     companion object {
         private const val TAG = "RTBuddyManager"
+
+        /**
+         * AirPods Max 2 (A3454, firmware 8E258) ignore the static DEVMOTION6 ID (16): the firmware
+         * advertises devmotion6 as a dynamically assigned RTBuddy service with ID 6.
+         * Found by https://github.com/FIocker/aap-head-tracker.
+         */
+        const val MAX_2_DEVMOTION6_SERVICE_ID = 6
     }
 
     private var sequence = 0
@@ -64,13 +71,13 @@ class RTBuddyManager(
     }
 
     private fun sendSensorServiceSetting(
-        service: SensorServiceType,
+        serviceId: Int,
         configuration: ByteArray,
     ): Boolean {
         val data = SensorDataWX.newBuilder()
             .setServiceSettings(
                 SensorServiceSetting.newBuilder()
-                    .setService(service)
+                    .setServiceValue(serviceId)
                     .setSetting(2)
                     .setConfiguration(
                         ByteString.copyFrom(configuration)
@@ -81,8 +88,12 @@ class RTBuddyManager(
         return sendSensorData(data)
     }
 
-    fun setSensorServiceReportInterval(sensorServiceType: SensorServiceType, interval: Duration): Boolean = sendSensorServiceSetting(
-        service = sensorServiceType,
+    fun setSensorServiceReportInterval(sensorServiceType: SensorServiceType, interval: Duration): Boolean =
+        setSensorServiceReportInterval(sensorServiceType.number, interval)
+
+    /** For services whose ID is not in the static [SensorServiceType] enum. */
+    fun setSensorServiceReportInterval(serviceId: Int, interval: Duration): Boolean = sendSensorServiceSetting(
+        serviceId = serviceId,
         configuration = byteArrayOf(0x01) + interval.toMicrosUINT32LE()
     )
 }

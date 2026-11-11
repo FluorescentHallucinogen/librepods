@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.kavishdevar.librepods.core.bluetooth.MacAddress
 import me.kavishdevar.librepods.core.bluetooth.aacp.AACPManager
+import me.kavishdevar.librepods.core.bluetooth.aacp.RTBuddyManager
 import me.kavishdevar.librepods.core.bluetooth.aacp.rtbuddy.proto.SensorServiceType
 import me.kavishdevar.librepods.core.bluetooth.aacp.types.AppleEvent
 import me.kavishdevar.librepods.core.bluetooth.aacp.types.ControlCommandIdentifier
@@ -281,17 +282,20 @@ class AppleDevice(
     }
 
     fun startHeadTracking() {
-        val sensorServiceType = when (metadata.value.model) {
+        val serviceId = when (metadata.value.model) {
             AirPodsModel.AIRPODS_5,
             AirPodsModel.AIRPODS_5_WCC -> {
-                SensorServiceType.CMA_COMMAND
+                SensorServiceType.CMA_COMMAND.number
+            }
+            AirPodsModel.AIRPODS_MAX_2 -> {
+                RTBuddyManager.MAX_2_DEVMOTION6_SERVICE_ID
             }
             else -> {
-                if (metadata.value.version3.ifBlank { "8" }.first().digitToInt() >= 8) SensorServiceType.DEVMOTION6 else SensorServiceType.ACTIVITY
+                (if (metadata.value.version3.ifBlank { "8" }.first().digitToInt() >= 8) SensorServiceType.DEVMOTION6 else SensorServiceType.ACTIVITY).number
             }
         }
         aacp.setSensorServiceReportInterval(
-            sensorServiceType = sensorServiceType,
+            serviceId = serviceId,
             interval = _settings.value.headTrackingInterval
         )
         _state.update {
@@ -302,17 +306,20 @@ class AppleDevice(
     }
 
     fun stopHeadTracking() {
-        val sensorServiceType = when (metadata.value.model) {
+        val serviceId = when (metadata.value.model) {
             AirPodsModel.AIRPODS_5,
             AirPodsModel.AIRPODS_5_WCC -> {
-                SensorServiceType.DEVMOTION6
+                SensorServiceType.DEVMOTION6.number
+            }
+            AirPodsModel.AIRPODS_MAX_2 -> {
+                RTBuddyManager.MAX_2_DEVMOTION6_SERVICE_ID
             }
             else -> {
-                if (metadata.value.version3.ifBlank { "8" }.first().digitToInt() >= 8) SensorServiceType.DEVMOTION6 else SensorServiceType.ACTIVITY
+                (if (metadata.value.version3.ifBlank { "8" }.first().digitToInt() >= 8) SensorServiceType.DEVMOTION6 else SensorServiceType.ACTIVITY).number
             }
         }
         aacp.setSensorServiceReportInterval(
-            sensorServiceType = sensorServiceType,
+            serviceId = serviceId,
             interval = Duration.ZERO
         )
         _state.update {
