@@ -477,7 +477,7 @@ private fun Plot() {
         shape = RoundedCornerShape(28.dp)
     ) {
         val horizontalColor = MaterialTheme.colorScheme.primary
-        val verticalColor = MaterialTheme.colorScheme.secondaryContainer // random
+        val verticalColor = MaterialTheme.colorScheme.error // red/pink, distinct from the blue horizontal line
 
         Box(
             modifier = Modifier
