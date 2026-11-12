@@ -477,7 +477,7 @@ object AirPodsSpecs {
                 BaseCapability.LOUD_SOUND_REDUCTION,
                 BaseCapability.ADAPTIVE_AUDIO,
                 BaseCapability.ADAPTIVE_VOLUME,
-                // Experimental: exposes head tracking / spatial audio screen for testing on Max 2
+                // Head tracking via the dynamic devmotion6 service (RTBuddyManager.MAX_2_DEVMOTION6_SERVICE_ID)
                 BaseCapability.HEAD_GESTURES,
             )
         ),

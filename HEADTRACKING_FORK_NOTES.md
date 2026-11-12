@@ -4,8 +4,8 @@ Feeds AirPods head orientation to Android's own audio Spatializer as a standard 
 system-wide spatial audio (here Dolby, via the OEM effect) follows your head. No root: a virtual `/dev/uhid` HID device is
 created from a Shizuku UserService running with shell identity.
 
-Tested only on a OnePlus 11 (CPH2447), ColorOS 16 / Android 16, with AirPods Pro. It needs an OEM spatializer that supports
-head tracking; other phones and AirPods models are untested. Credits and licenses: `THIRD_PARTY_NOTICES.md`.
+Tested on a OnePlus 11 (CPH2447), ColorOS 16 / Android 16, with AirPods Pro, and on a Google Pixel 7 Pro with the latest stable Android, with AirPods Max 2.
+It needs an OEM spatializer that supports head tracking. Credits and licenses: `THIRD_PARTY_NOTICES.md`.
 
 ## What works
 
@@ -97,7 +97,7 @@ Conversion in `AACPManager`:
 AirPods stream rate is the interval in the 0x17 start packet (Diagnostics selector: 40 / 20 / 10 ms). Measured at 10 ms: about
 99 Hz over 43 s, almost no repeated samples. Bluetooth arrival is bursty (median gap 8 ms, p95 33 ms, max 132 ms).
 
-### AirPods Max 2 (not tested on a phone)
+### AirPods Max 2 (tested on a Google Pixel 7 Pro with the latest stable Android)
 
 Protocol facts from https://github.com/FIocker/aap-head-tracker, confirmed there on A3454 with firmware 8E258 (Windows):
 
@@ -106,13 +106,14 @@ Protocol facts from https://github.com/FIocker/aap-head-tracker, confirmed there
   with that ID, and reports arrive as `SensorCommand` with service 6, which the static enum names `MANDO`.
 - Reports keep the layout above (attitude at 20/22/24) and are at least 58 bytes; motion samples have payload[0] == 1
   and payload[9] == 3. Gyro and gravity offsets are assumed to be the same as on AirPods Pro.
-- Sensor axes follow the head: y vertical, x front-back, z through the ear cups. The ear axis is therefore (0, 0, 1)
-  (`EAR_AXIS_MAX_2`) instead of the measured AirPods Pro axis. Its sign is a guess; "Flip pitch/roll" inverts it.
+- Sensor axes follow the head: y vertical, x front-back, z through the ear cups. The ear axis (head +x, to the right) is
+  (0, 0, -1) in the sensor frame (`EAR_AXIS_MAX_2`), instead of the measured AirPods Pro axis. The sign was measured on the
+  Pixel 7 Pro: pitch and roll are correct with "Flip pitch/roll" off.
 
 The ID is hard-coded, not discovered, so other firmware may need another one. Sensor descriptors are logged
 (`Sensor descriptor: service=...`) to check what the firmware advertises.
 
-### Platform behaviour (read from AOSP, not verified on ColorOS)
+### Platform behaviour (read from AOSP, tested on a Google Pixel 7 Pro with the latest stable Android)
 
 `SpatializerPoseController` recenters when the head stays within about 10.5 degrees for 6 s, and rate-limits the jump
 (0.8 rad/s). That bounds yaw drift in normal use, so we do not add our own recenter leak.
@@ -180,7 +181,7 @@ before (checked by `op11/ap/re/tempest/identity_check.sh`). Not tested on a phon
   `Android/data/me.kavishdevar.librepods/files/headtracking_logs/*.csv` with Share (flushes every 2 s, stops at 20 MB or when
   the screen closes); and a 3D head visualizer with a live mode and a replay mode for those CSVs (play/pause, speed,
   scrub). Columns: `elapsed_ms,payload_hex,qw,qx,qy,qz,ax,ay,az,head_x_rad,head_y_rad,head_z_rad,sent_rx,sent_ry,sent_rz`.
-  The visualizer and the screens were only compile-checked beyond basic use; layout and frame pacing are unverified.
+  The visualizer and the screens were tested on a Google Pixel 7 Pro with the latest stable Android.
 
 ### Debugging commands
 

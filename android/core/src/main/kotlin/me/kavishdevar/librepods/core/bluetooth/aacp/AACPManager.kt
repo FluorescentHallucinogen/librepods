@@ -1207,9 +1207,9 @@ class AACPManager(private val device: AppleDevice) {
         val EAR_AXIS: FloatArray = floatArrayOf(-PITCH_AXIS[0], -PITCH_AXIS[1], -PITCH_AXIS[2])
         val EAR_AXIS_MIRRORED: FloatArray = HeadFrame.mirrored(EAR_AXIS)
         // AirPods Max 2: the sensor frame follows the head (y vertical, x front-back, z through the
-        // ear cups; axes from FIocker/aap-head-tracker). Which way +z points is not measured, so
-        // "Flip pitch/roll" may be needed.
-        val EAR_AXIS_MAX_2: FloatArray = floatArrayOf(0f, 0f, 1f)
+        // ear cups; axes from FIocker/aap-head-tracker). Sensor -z points to the right ear, measured on a
+        // Google Pixel 7 Pro with the latest stable Android: pitch and roll are correct with "Flip pitch/roll" off.
+        val EAR_AXIS_MAX_2: FloatArray = floatArrayOf(0f, 0f, -1f)
         val EAR_AXIS_MAX_2_MIRRORED: FloatArray = HeadFrame.mirrored(EAR_AXIS_MAX_2)
     }
     private var poseLogCount = 0
